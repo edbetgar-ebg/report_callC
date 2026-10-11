@@ -10,11 +10,9 @@ Token:
     - En Render: agrega la Environment Variable TOKEN con tu token.
 
 Nota Render:
-    Este archivo incluye un mini servidor HTTP que abre el puerto PORT
-    para que el Web Service de Render no marque "no open ports detected".
+    Incluye un mini servidor HTTP para que Render detecte un puerto abierto.
 """
 
-import asyncio
 import calendar
 import logging
 import os
@@ -495,8 +493,6 @@ conv_handler = ConversationHandler(
 
 # ─────────────────────── SERVIDOR HTTP (para Render) ───────────────────────
 class HealthHandler(BaseHTTPRequestHandler):
-    """Mini servidor que solo responde 200 OK a cualquier petición.
-    Sirve para que Render detecte un puerto abierto en el Web Service."""
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -508,7 +504,6 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, fmt, *args):
-        # Silenciamos los logs del servidor HTTP para no llenar la consola.
         pass
 
 def start_health_server():
@@ -526,8 +521,6 @@ def main():
 
     init_db()
 
-    # Arrancamos el servidor HTTP en un hilo aparte (solo si hay PORT definido,
-    # es decir, cuando corremos en Render u otro hosting).
     if os.environ.get("PORT"):
         threading.Thread(target=start_health_server, daemon=True).start()
 
