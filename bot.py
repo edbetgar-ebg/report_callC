@@ -8,13 +8,20 @@ Requisitos:
 Token:
     - En local: edita TOKEN_DEFAULT abajo con tu token.
     - En Render: agrega la Environment Variable TOKEN con tu token.
+
+Nota Render:
+    Este archivo incluye un mini servidor HTTP que abre el puerto PORT
+    para que el Web Service de Render no marque "no open ports detected".
 """
 
+import asyncio
 import calendar
 import logging
 import os
 import sqlite3
+import threading
 from datetime import date
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from telegram import (
     InlineKeyboardButton, InlineKeyboardMarkup,
@@ -26,15 +33,13 @@ from telegram.ext import (
 )
 
 # ─────────────────────── CONFIGURACIÓN ───────────────────────
-# En Render pondrás la variable de entorno TOKEN.
-# En local, si no existe esa variable, se usa TOKEN_DEFAULT.
-TOKEN_DEFAULT  = "8826571689:AAGD7-9jxvT6yRbfQx6hB5gj0tdjWB1U1sI"
-TOKEN          = os.environ.get("TOKEN", TOKEN_DEFAULT)
+TOKEN_DEFAULT = "TU_TOKEN_AQUI"
+TOKEN         = os.environ.get("TOKEN", TOKEN_DEFAULT)
 
-DB_PATH        = "bot.db"
-ANIO_MINIMO    = 2026
-META_VENTAS    = 90      # ventas necesarias para el premio
-PAGO_POR_HORA  = 1       # USDT por hora
+DB_PATH       = os.environ.get("DB_PATH", "bot.db")
+ANIO_MINIMO   = 2026
+META_VENTAS   = 90      # ventas necesarias para el premio
+PAGO_POR_HORA = 1       # USDT por hora
 
 MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
          "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -488,6 +493,30 @@ conv_handler = ConversationHandler(
     allow_reentry=True,
 )
 
+# ─────────────────────── SERVIDOR HTTP (para Render) ───────────────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    """Mini servidor que solo responde 200 OK a cualquier petición.
+    Sirve para que Render detecte un puerto abierto en el Web Service."""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"Bot de Telegram en marcha")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, fmt, *args):
+        # Silenciamos los logs del servidor HTTP para no llenar la consola.
+        pass
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    log.info(f"Health server escuchando en puerto {port}")
+    server.serve_forever()
+
 # ─────────────────────── MAIN ───────────────────────
 def main():
     if not TOKEN or TOKEN == "TU_TOKEN_AQUI":
@@ -496,6 +525,12 @@ def main():
         return
 
     init_db()
+
+    # Arrancamos el servidor HTTP en un hilo aparte (solo si hay PORT definido,
+    # es decir, cuando corremos en Render u otro hosting).
+    if os.environ.get("PORT"):
+        threading.Thread(target=start_health_server, daemon=True).start()
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(conv_handler)
     print("🤖 Bot en marcha...")
