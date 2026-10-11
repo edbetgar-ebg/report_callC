@@ -4,16 +4,21 @@
 Bot de Telegram: Registro + Reporte de Ventas/Horas + Informes
 Requisitos:
     pip install "python-telegram-bot>=20"
+
+Token:
+    - En local: edita TOKEN_DEFAULT abajo con tu token.
+    - En Render: agrega la Environment Variable TOKEN con tu token.
 """
 
 import calendar
 import logging
+import os
 import sqlite3
 from datetime import date
 
 from telegram import (
     InlineKeyboardButton, InlineKeyboardMarkup,
-    ReplyKeyboardMarkup, ReplyKeyboardRemove, Update,
+    ReplyKeyboardMarkup, Update,
 )
 from telegram.ext import (
     Application, CallbackQueryHandler, CommandHandler,
@@ -21,7 +26,11 @@ from telegram.ext import (
 )
 
 # ─────────────────────── CONFIGURACIÓN ───────────────────────
-TOKEN          = "8826571689:AAGD7-9jxvT6yRbfQx6hB5gj0tdjWB1U1sI"
+# En Render pondrás la variable de entorno TOKEN.
+# En local, si no existe esa variable, se usa TOKEN_DEFAULT.
+TOKEN_DEFAULT  = "8826571689:AAGD7-9jxvT6yRbfQx6hB5gj0tdjWB1U1sI"
+TOKEN          = os.environ.get("TOKEN", TOKEN_DEFAULT)
+
 DB_PATH        = "bot.db"
 ANIO_MINIMO    = 2026
 META_VENTAS    = 90      # ventas necesarias para el premio
@@ -34,6 +43,7 @@ ROLES = ("TExp", "PV", "Ret")
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                     level=logging.INFO)
+log = logging.getLogger(__name__)
 
 # ─────────────────────── BASE DE DATOS ───────────────────────
 def _con():
@@ -50,7 +60,7 @@ def init_db():
         created_at TEXT NOT NULL)""")
     con.execute("""CREATE TABLE IF NOT EXISTS reports(
         user_id INTEGER NOT NULL,
-        day     TEXT NOT NULL,      -- YYYY-MM-DD
+        day     TEXT NOT NULL,
         hours   INTEGER NOT NULL,
         sales   INTEGER NOT NULL,
         PRIMARY KEY (user_id, day))""")
@@ -58,20 +68,24 @@ def init_db():
     con.close()
 
 def get_user(uid):
-    con = _con(); r = con.execute("SELECT * FROM users WHERE user_id=?", (uid,)).fetchone(); con.close()
+    con = _con()
+    r = con.execute("SELECT * FROM users WHERE user_id=?", (uid,)).fetchone()
+    con.close()
     return r
 
 def add_user(uid, username, role):
     con = _con()
     con.execute("INSERT INTO users(user_id,username,role,created_at) VALUES(?,?,?,?)",
                 (uid, username, role, date.today().isoformat()))
-    con.commit(); con.close()
+    con.commit()
+    con.close()
 
 def delete_user(uid):
     con = _con()
     con.execute("DELETE FROM reports WHERE user_id=?", (uid,))
     con.execute("DELETE FROM users   WHERE user_id=?", (uid,))
-    con.commit(); con.close()
+    con.commit()
+    con.close()
 
 def upsert_report(uid, day, hours, sales):
     con = _con()
@@ -79,7 +93,8 @@ def upsert_report(uid, day, hours, sales):
                    ON CONFLICT(user_id,day) DO UPDATE SET
                        hours = excluded.hours,
                        sales = excluded.sales""", (uid, day, hours, sales))
-    con.commit(); con.close()
+    con.commit()
+    con.close()
 
 def get_reports(uid, start, end):
     con = _con()
@@ -475,6 +490,11 @@ conv_handler = ConversationHandler(
 
 # ─────────────────────── MAIN ───────────────────────
 def main():
+    if not TOKEN or TOKEN == "TU_TOKEN_AQUI":
+        print("⚠️ No hay token configurado. Define la variable de entorno TOKEN "
+              "o edita TOKEN_DEFAULT en el código.")
+        return
+
     init_db()
     app = Application.builder().token(TOKEN).build()
     app.add_handler(conv_handler)
