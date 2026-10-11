@@ -31,7 +31,7 @@ from telegram.ext import (
 )
 
 # ─────────────────────── CONFIGURACIÓN ───────────────────────
-TOKEN_DEFAULT = "TU_TOKEN_AQUI"
+TOKEN_DEFAULT = "8681409894:AAE5L7RdDYY-N6Kg1LfyqllndlDhOhEhX0Y"
 TOKEN         = os.environ.get("TOKEN", TOKEN_DEFAULT)
 
 DB_PATH       = os.environ.get("DB_PATH", "bot.db")
