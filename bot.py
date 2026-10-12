@@ -8,9 +8,6 @@ Requisitos:
 Token:
     - En local: edita TOKEN_DEFAULT abajo con tu token.
     - En Render: agrega la Environment Variable TOKEN con tu token.
-
-Nota Render:
-    Incluye un mini servidor HTTP para que Render detecte un puerto abierto.
 """
 
 import calendar
@@ -31,13 +28,13 @@ from telegram.ext import (
 )
 
 # ─────────────────────── CONFIGURACIÓN ───────────────────────
-TOKEN_DEFAULT = "8681409894:AAE5L7RdDYY-N6Kg1LfyqllndlDhOhEhX0Y"
+TOKEN_DEFAULT = "8681409894:AAFNNSfSJVEIGSBsPXBIQ30OWpcH6ciwxSQ"
 TOKEN         = os.environ.get("TOKEN", TOKEN_DEFAULT)
 
 DB_PATH       = os.environ.get("DB_PATH", "bot.db")
 ANIO_MINIMO   = 2026
-META_VENTAS   = 90      # ventas necesarias para el premio
-PAGO_POR_HORA = 1       # USDT por hora
+META_VENTAS   = 90
+PAGO_POR_HORA = 1
 
 MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
          "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -152,13 +149,12 @@ def build_monthly_report(uid, year, month):
         f"  Horas: {h2}",
     ]
 
-    extra = _premio(uid, year, month, v1 + v2, {r["day"] for r in rows})
+    extra = _premio(year, month, v1 + v2, {r["day"] for r in rows})
     if extra:
         lineas += ["", extra]
     return "\n".join(lineas)
 
-def _premio(uid, year, month, ventas_mes, dias_reportados):
-    """Solo si el mes pedido es el mes actual."""
+def _premio(year, month, ventas_mes, dias_reportados):
     hoy = date.today()
     if (year, month) != (hoy.year, hoy.month):
         return None
@@ -378,7 +374,10 @@ async def start_informe(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def informe_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.edit_message_reply_markup(reply_markup=None)
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     if q.data == "inf:mes":
         await context.bot.send_message(q.from_user.id,
@@ -389,7 +388,6 @@ async def informe_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📅 Introduce el AÑO (≥ {ANIO_MINIMO}):", reply_markup=CANCEL)
         return S_TOT_YEAR
 
-# --- Informe mensual ---
 async def mes_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         y = int(update.message.text.strip())
@@ -418,7 +416,6 @@ async def mes_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, reply_markup=MENU)
     return ConversationHandler.END
 
-# --- Informe total ---
 async def tot_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         y = int(update.message.text.strip())
@@ -465,20 +462,25 @@ conv_handler = ConversationHandler(
         MessageHandler(filters.Regex(r"^🗑 Eliminar datos$"), start_delete),
     ],
     states={
-        S_REG_ROLE:    [CallbackQueryHandler(role_chosen,      pattern=r"^role:")],
-        S_DEL_CONFIRM: [CallbackQueryHandler(delete_confirmed, pattern=r"^del:")],
-
+        S_REG_ROLE: [
+            CallbackQueryHandler(role_chosen, pattern=r"^role:", per_message=False)
+        ],
+        S_DEL_CONFIRM: [
+            CallbackQueryHandler(delete_confirmed, pattern=r"^del:", per_message=False)
+        ],
         S_REP_YEAR:  [MessageHandler(INPUT, rep_year)],
         S_REP_MONTH: [MessageHandler(INPUT, rep_month)],
         S_REP_DAY:   [MessageHandler(INPUT, rep_day)],
         S_REP_HOURS: [MessageHandler(INPUT, rep_hours)],
         S_REP_SALES: [MessageHandler(INPUT, rep_sales)],
 
-        S_INF_CHOICE: [CallbackQueryHandler(informe_chosen, pattern=r"^inf:")],
-        S_MES_YEAR:   [MessageHandler(INPUT, mes_year)],
-        S_MES_MONTH:  [MessageHandler(INPUT, mes_month)],
-        S_TOT_YEAR:   [MessageHandler(INPUT, tot_year)],
-        S_TOT_RANGE:  [MessageHandler(INPUT, tot_range)],
+        S_INF_CHOICE: [
+            CallbackQueryHandler(informe_chosen, pattern=r"^inf:", per_message=False)
+        ],
+        S_MES_YEAR:  [MessageHandler(INPUT, mes_year)],
+        S_MES_MONTH: [MessageHandler(INPUT, mes_month)],
+        S_TOT_YEAR:  [MessageHandler(INPUT, tot_year)],
+        S_TOT_RANGE: [MessageHandler(INPUT, tot_range)],
     },
     fallbacks=[
         CommandHandler("cancel", cancel),
@@ -489,6 +491,7 @@ conv_handler = ConversationHandler(
         MessageHandler(filters.Regex(r"^🗑 Eliminar datos$"), start_delete),
     ],
     allow_reentry=True,
+    per_message=False,
 )
 
 # ─────────────────────── SERVIDOR HTTP (para Render) ───────────────────────
